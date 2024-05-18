@@ -2,29 +2,37 @@ import express from 'express';
 import { Server } from 'socket.io';
 
 const PORT = process.env.PORT || 3500;
-const ADMIN = 'Admin';
+
+const CodeRoomsState = {
+  rooms: [],
+  setRooms: function (newRoomsArray) {
+    this.rooms = newRoomsArray;
+  },
+};
 
 const app = express();
+
+// Middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Routes
+/**
+ * create a new code room
+ */
+app.post('/api/rooms', (req, res) => {
+  const { id } = req.body;
+  CodeRoomsState.setRooms([...CodeRoomsState.rooms, { id }]);
+
+  console.log('CodeRoomsState:', CodeRoomsState.rooms);
+  res.status(201).json({ message: 'Room created successfully' });
+});
 
 const expressServer = app.listen(PORT, () => {
   console.log(`listening on port ${PORT}`);
 });
 
 // state
-const UsersState = {
-  users: [],
-  setUsers: function (newUsersArray) {
-    this.users = newUsersArray;
-  },
-};
-
-const ActiveRidesState = {
-  rides: [],
-  setRides: function (newRidesArray) {
-    this.rides = newRidesArray;
-  },
-};
-
 const io = new Server(expressServer, {
   cors: {
     origin: '*',
@@ -34,191 +42,128 @@ const io = new Server(expressServer, {
 io.on('connection', (socket) => {
   console.log(`User ${socket.id} connected`);
 
-  const userId = socket.handshake.query.userId;
-
-  // This event listens for users to go live
-  socket.on('go-live', (data) => {
-    const { name, type } = data;
-    activateUser(socket.id, name, type, userId);
-  });
   /**
-   * Driver events
-   **/
-
-  // This event listens for if the driver is live and send the status back to him
-  socket.on('ready', () => {
-    const user = getUser(socket.id);
-
-    if (user) {
-      io.to(socket.id).emit('status', {
-        data: user,
-      });
-    }
-  });
-
-  // This event listens for a driver to accept a rider
-  socket.on('accept', (data) => {
-    const { riderId } = data;
-
-    //  set active ride
-    const ride = updateRide({
-      driverId: socket.id,
-      riderId,
-      rideStatus: 'accepted',
-      driverLocation: 'abuja 900211',
-    });
-
-    // Generate a unique identifier for the ride, e.g., a combination of driver and rider IDs
-    const rideId = `${ride.driverId}-${ride.riderId}`;
-    socket.join(rideId); // Driver joins the ride room
-    io.to(riderId).socketsJoin(rideId); // Rider joins the same ride room
-
-    // Then, emit an event to this room whenever there are updates to this ride
-    io.to(rideId).emit('rideUpdate', { ride });
-
-    console.log(ride);
-  });
-
-  /**
-   * Rider events
+   * Code room events
    */
-  // This event listens for a rider to request active drivers
-  socket.on('find-drivers', () => {
-    console.log(UsersState.users);
-    // get all drivers
-    const drivers = UsersState.users.filter(
-      (user) => user.userType === 'drivers'
+  socket.on('join-room', (data) => {
+    const { roomId, user } = data;
+
+    socket.join(roomId);
+
+    const room = CodeRoomsState.rooms.find((room) => room.id === roomId);
+
+    if (!room) {
+      // the room does not exist
+      return;
+    }
+
+    // join the room
+    socket.join(roomId);
+
+    // update the user's room
+    CodeRoomsState.setRooms(
+      CodeRoomsState.rooms.map((room) => {
+        if (room.id === roomId) {
+          return {
+            ...room,
+            users: [...room.users, { ...user, id: socket.id }],
+          };
+        }
+        return room;
+      })
     );
 
-    // send drivers to rider
-    io.to(socket.id).emit('drivers', {
-      drivers,
+    console.log('CodeRoomsState: <join room>', CodeRoomsState.rooms);
+
+    // send the updated room to all users in the room
+    io.to(roomId).emit('room-update', {
+      room: CodeRoomsState.rooms.find((room) => room.id === roomId),
     });
   });
 
-  // This event listens for a rider to request a driver
-  socket.on('request-driver', (data) => {
-    const { driverId } = data;
-    const driver = getUser(driverId);
-    console.log(driver);
-    if (driver) {
-      io.to(driverId).emit('driver-request', {
-        rider: getUser(socket.id),
-      });
+  socket.on('leave-room', (data) => {
+    const { roomId, user } = data;
+
+    const room = CodeRoomsState.rooms.find((room) => room.id === roomId);
+
+    if (!room) {
+      // the room does not exist
+      return;
     }
+
+    socket.leave(roomId);
+
+    // update the user's room
+    CodeRoomsState.setRooms(
+      CodeRoomsState.rooms.map((room) => {
+        if (room.id === roomId) {
+          return {
+            ...room,
+            users: room.users.filter((u) => u.id !== user.id),
+          };
+        }
+        return room;
+      })
+    );
+
+    console.log('CodeRoomsState: <leave room>', CodeRoomsState.rooms);
+
+    // send the updated room to all users in the room
+    io.to(roomId).emit('room-update', {
+      room: CodeRoomsState.rooms.find((room) => room.id === roomId),
+    });
   });
 
-  /**
-   * Update ride status or location
-   */
-  socket.on('update-ride', (data) => {
-    const { driverId, riderId, ...others } = data;
+  // close the room
+  socket.on('close-room', (data) => {
+    const { roomId } = data;
 
-    // Update ride
-    updateRide(data);
+    const room = CodeRoomsState.rooms.find((room) => room.id === roomId);
+
+    if (!room) {
+      // the room does not exist
+      return;
+    }
+
+    // close the room
+    CodeRoomsState.setRooms(
+      CodeRoomsState.rooms.filter((room) => room.id !== roomId)
+    );
+
+    console.log('CodeRoomsState: <close room>', CodeRoomsState.rooms);
+
+    // send the updated room to all users in the room
+    io.to(roomId).emit('room-closed', {
+      message: 'Room closed',
+    });
   });
 
   // When user disconnects - to all others
   socket.on('disconnect', () => {
-    const user = getUser(socket.id);
-    userLeavesApp(socket.id);
+    const user = socket.id;
 
-    if (user) {
-      io.to(user.room).emit(
-        'message',
-        buildMsg(ADMIN, `${user.name} has left the room`)
-      );
+    // remove the user from the room
+    CodeRoomsState.setRooms(
+      CodeRoomsState.rooms.map((room) => {
+        return {
+          ...room,
+          users: room.users.filter((u) => u.id !== user.id),
+        };
+      })
+    );
 
-      io.to(user.room).emit('userList', {
-        users: getUsersInRoom(user.room),
-      });
+    // get the room id
+    const roomId = CodeRoomsState.rooms.find((room) =>
+      room.users.some((u) => u.id === user.id)
+    )?.id;
 
-      io.emit('roomList', {
-        rooms: getAllActiveRooms(),
-      });
-    }
+    console.log('CodeRoomsState: <disconnected room>', CodeRoomsState.rooms);
+
+    // send the updated room to all users in the room
+    io.to(roomId).emit('room-update', {
+      room: CodeRoomsState.rooms.find((room) => room.id === roomId),
+    });
 
     console.log(`User ${socket.id} disconnected`);
   });
 });
-
-function buildMsg(name, text) {
-  return {
-    name,
-    text,
-    time: new Intl.DateTimeFormat('default', {
-      hour: 'numeric',
-      minute: 'numeric',
-      second: 'numeric',
-    }).format(new Date()),
-  };
-}
-
-// User functions
-function activateUser(id, name, userType, userId) {
-  const user = { id, name, userType, userId };
-  UsersState.setUsers([
-    ...UsersState.users.filter((user) => user.id !== id),
-    user,
-  ]);
-  return user;
-}
-
-/**
- * Update ride
- * @param {object} data
- * @param {string} data.driverId
- * @param {string} data.riderId
- * @param {string} data.pickupLocation
- * @param {string} data.rideDestination
- * @param {string} data.rideStatus
- * @param {string} data.driverLocation
- * @returns
- */
-function updateRide(data) {
-  let ride = {};
-  const { driverId, riderId } = data;
-
-  const otherRides = ActiveRidesState.rides.filter(
-    (r) => r.driver.id !== driverId
-  );
-
-  const currentRide = ActiveRidesState.rides.find(
-    (ride) => ride.driver.id === driverId
-  );
-
-  if (!currentRide) {
-    ride = {
-      driver: getUser(driverId),
-      rider: getUser(riderId),
-      ...data,
-    };
-  } else {
-    ride = {
-      ...currentRide,
-      ...data,
-    };
-  }
-
-  ActiveRidesState.setRides([...otherRides, ride]);
-
-  const rideId = `${driverId}-${riderId}`;
-  io.to(rideId).emit('rideUpdate', { ride });
-  return ride;
-}
-
-function userLeavesApp(id) {
-  UsersState.setUsers(UsersState.users.filter((user) => user.id !== id));
-}
-
-function getUser(id) {
-  return UsersState.users.find((user) => user.id === id);
-}
-
-function getUsersInRoom(room) {
-  return UsersState.users.filter((user) => user.room === room);
-}
-
-function getAllActiveRooms() {
-  return Array.from(new Set(UsersState.users.map((user) => user.room)));
-}
