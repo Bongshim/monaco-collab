@@ -73,7 +73,10 @@ io.on('connection', (socket) => {
         if (room.id === roomId) {
           return {
             ...room,
-            users: [...room.users, { ...user, id: socket.id }],
+            users: [
+              ...room.users.filter((u) => u._id !== user._id),
+              { ...user, id: socket.id },
+            ],
           };
         }
         return room;
