@@ -131,30 +131,30 @@ io.on('connection', (socket) => {
   socket.on('update-code', (data) => {
     const { roomId, code } = data;
 
-    const room = CodeRoomsState.rooms.find((room) => room.id === roomId);
+    // const room = CodeRoomsState.rooms.find((room) => room.id === roomId);
 
-    if (!room) {
-      // the room does not exist
-      return;
-    }
+    // if (!room) {
+    //   // the room does not exist
+    //   return;
+    // }
 
-    // update the code in the room
-    CodeRoomsState.setRooms(
-      CodeRoomsState.rooms.map((room) => {
-        if (room.id === roomId) {
-          return {
-            ...room,
-            code,
-          };
-        }
-        return room;
-      })
-    );
+    // // update the code in the room
+    // CodeRoomsState.setRooms(
+    //   CodeRoomsState.rooms.map((room) => {
+    //     if (room.id === roomId) {
+    //       return {
+    //         ...room,
+    //         code,
+    //       };
+    //     }
+    //     return room;
+    //   })
+    // );
 
     console.log('CodeRoomsState: <update code>', CodeRoomsState.rooms);
 
     // send the updated room to all users in the room
-    io.to(roomId).emit('code-update', {
+    socket.broadcast.to(roomId).emit('code-update', {
       code,
     });
   });
