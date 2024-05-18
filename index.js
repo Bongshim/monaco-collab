@@ -64,7 +64,10 @@ io.on('connection', (socket) => {
 
     if (!room) {
       // the room does not exist
-      return;
+      return {
+        status: false,
+        message: 'Room does not exist',
+      };
     }
 
     // join the room
@@ -90,6 +93,7 @@ io.on('connection', (socket) => {
 
     // send the updated room to all users in the room
     io.to(roomId).emit('room-update', {
+      status: true,
       room: CodeRoomsState.rooms.find((room) => room.id === roomId),
     });
   });
