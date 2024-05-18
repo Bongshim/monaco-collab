@@ -26,10 +26,7 @@ app.use(express.urlencoded({ extended: true }));
  */
 app.post('/api/rooms', (req, res) => {
   const { id, host } = req.body;
-  CodeRoomsState.setRooms([
-    ...CodeRoomsState.rooms,
-    { id, users: [], host, code: '' },
-  ]);
+  CodeRoomsState.setRooms([...CodeRoomsState.rooms, { id, users: [], host }]);
 
   console.log('CodeRoomsState:', CodeRoomsState.rooms);
   res.status(201).json({
