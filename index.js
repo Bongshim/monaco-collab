@@ -26,7 +26,10 @@ app.use(express.urlencoded({ extended: true }));
  */
 app.post('/api/rooms', (req, res) => {
   const { id, host } = req.body;
-  CodeRoomsState.setRooms([...CodeRoomsState.rooms, { id, users: [], host }]);
+  CodeRoomsState.setRooms([
+    ...CodeRoomsState.rooms,
+    { id, users: [], host, code: '' },
+  ]);
 
   console.log('CodeRoomsState:', CodeRoomsState.rooms);
   res.status(201).json({
@@ -121,6 +124,38 @@ io.on('connection', (socket) => {
     // send the updated room to all users in the room
     io.to(roomId).emit('room-update', {
       room: CodeRoomsState.rooms.find((room) => room.id === roomId),
+    });
+  });
+
+  // update the code in the room
+  socket.on('update-code', (data) => {
+    const { roomId, code } = data;
+
+    const room = CodeRoomsState.rooms.find((room) => room.id === roomId);
+
+    if (!room) {
+      // the room does not exist
+      return;
+    }
+
+    // update the code in the room
+    CodeRoomsState.setRooms(
+      CodeRoomsState.rooms.map((room) => {
+        if (room.id === roomId) {
+          return {
+            ...room,
+            code,
+          };
+        }
+        return room;
+      })
+    );
+
+    console.log('CodeRoomsState: <update code>', CodeRoomsState.rooms);
+
+    // send the updated room to all users in the room
+    io.to(roomId).emit('code-update', {
+      code,
     });
   });
 
