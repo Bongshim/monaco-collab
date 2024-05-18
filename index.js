@@ -130,6 +130,7 @@ io.on('connection', (socket) => {
 
     // send the updated room to all users in the room
     io.to(roomId).emit('room-update', {
+      status: true,
       room: CodeRoomsState.rooms.find((room) => room.id === roomId),
     });
   });
@@ -214,6 +215,7 @@ io.on('connection', (socket) => {
 
     // send the updated room to all users in the room
     io.to(roomId).emit('room-update', {
+      status: true,
       room: CodeRoomsState.rooms.find((room) => room.id === roomId),
     });
 
