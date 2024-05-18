@@ -25,8 +25,8 @@ app.use(express.urlencoded({ extended: true }));
  * create a new code room
  */
 app.post('/api/rooms', (req, res) => {
-  const { id } = req.body;
-  CodeRoomsState.setRooms([...CodeRoomsState.rooms, { id, users: [] }]);
+  const { id, host } = req.body;
+  CodeRoomsState.setRooms([...CodeRoomsState.rooms, { id, users: [], host }]);
 
   console.log('CodeRoomsState:', CodeRoomsState.rooms);
   res.status(201).json({
