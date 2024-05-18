@@ -144,7 +144,7 @@ io.on('connection', (socket) => {
 
     // send the updated room to all users in the room
     io.to(roomId).emit('room-closed', {
-      status: 'success',
+      status: true,
       message: 'Room closed',
     });
   });
