@@ -25,7 +25,10 @@ app.post('/api/rooms', (req, res) => {
   CodeRoomsState.setRooms([...CodeRoomsState.rooms, { id }]);
 
   console.log('CodeRoomsState:', CodeRoomsState.rooms);
-  res.status(201).json({ message: 'Room created successfully' });
+  res.status(201).json({
+    success: true,
+    message: 'Room created successfully',
+  });
 });
 
 const expressServer = app.listen(PORT, () => {
